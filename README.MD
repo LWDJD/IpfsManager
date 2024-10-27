@@ -1,2 +1,4 @@
-# IpfsManager
-IPFS管理器，可以一键将文件固定在Crust。
+# 欢迎使用IpfsManager
+---
+* [ ] #将文件一键固定在Crust
+* [ ] #自动重试失败请求

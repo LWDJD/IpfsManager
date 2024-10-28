@@ -4,12 +4,235 @@ import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
 import io.github.lwdjd.ipfs.manager.JsonProcess;
 import io.github.lwdjd.ipfs.manager.Main;
+import io.github.lwdjd.ipfs.manager.api.ipfs.IpfsApi;
 import io.github.lwdjd.ipfs.manager.config.ConfigManager;
 import io.github.lwdjd.ipfs.manager.crust.AutoPins;
 
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class Commands {
+
+    private static List<HashMap<String,String>> getCidLinks(String cid) throws InterruptedException {
+        TempFiles tempFileLinks = new TempFiles();
+        TempFiles resultFiles = new TempFiles();
+
+
+        JSONObject ipfsFileLinksJsonObj = JSONObject.parseObject(IpfsApi.getIpfsFileLinks(cid));
+        JSONArray ipfsFileLinksJsonObjObjArray = ipfsFileLinksJsonObj.getJSONArray("Objects");
+        JSONArray ipfsFileLinksJsonArray = ipfsFileLinksJsonObjObjArray.getJSONObject(0).getJSONArray("Links");
+        List<HashMap<String,String>> ipfsFileLinks = JsonProcess.convertJsonToListHashMap(ipfsFileLinksJsonArray);
+
+        for(HashMap<String,String> ipfsFileLink:ipfsFileLinks){
+            String fileName = ipfsFileLink.get("Name");
+            String fileType = ipfsFileLink.get("Type");
+            if(fileType.equals("1")){
+                tempFileLinks.addTempFiles(ipfsFileLink);
+            }else if(fileType.equals("2")){
+                if(!fileName.equals("")){
+                    resultFiles.addTempFiles(ipfsFileLink);
+                }
+            }
+        }
+
+        //线程数
+        int threadCount = 5;
+        CountDownLatch latch = new CountDownLatch(threadCount);
+        for (int i = 0; i < threadCount; i++) {
+            int finalI = i;
+            new Thread(() -> {
+                try {// 执行线程任务
+//                    System.out.println("线程 " + finalI + " 已运行");
+                    while (true) {
+                        HashMap<String,String> Link;
+                        try {
+                            Link = tempFileLinks.getAndRemoveTempFiles(0);
+                        } catch (Exception e) {
+                            break;
+                        }
+
+
+                        JSONObject ipfsFileLinksJsonObj2 = JSONObject.parseObject(IpfsApi.getIpfsFileLinks(Link.get("Hash")));
+                        JSONArray ipfsFileLinksJsonObjObjArray2 = ipfsFileLinksJsonObj2.getJSONArray("Objects");
+                        JSONArray ipfsFileLinksJsonArray2 = ipfsFileLinksJsonObjObjArray2.getJSONObject(0).getJSONArray("Links");
+                        List<HashMap<String,String>> ipfsFileLinks2 = JsonProcess.convertJsonToListHashMap(ipfsFileLinksJsonArray2);
+
+                        List<HashMap<String,String>> files = new ArrayList<>();
+                        for(HashMap<String,String> ipfsFileLink:ipfsFileLinks2){
+                            String fileName = ipfsFileLink.get("Name");
+                            String fileType = ipfsFileLink.get("Type");
+                            if(fileType.equals("1")){
+                                tempFileLinks.addTempFiles(ipfsFileLink);
+                            }else if(fileType.equals("2")){
+                                if(!fileName.equals("")){
+                                    files.add(ipfsFileLink);
+                                }
+                            }
+                        }
+                        if (files.size()!=0){
+                            resultFiles.addAllTempFiles(files);
+                        }
+                    }
+                } finally {
+//                    System.out.println("线程 " + finalI + " 已结束");
+                    latch.countDown(); // 任务完成后计数减1
+                }
+            }).start();
+        }
+
+        latch.await(); // 等待所有线程执行完毕
+
+
+        return resultFiles.getTempFiles();
+    }
+
+    private static List<HashMap<String,String>> getFileLinks(String path) throws InterruptedException {
+        TempFiles tempFileLinks = new TempFiles();
+        TempFiles resultFiles = new TempFiles();
+
+        //获取根目录文件(夹)Json
+        String rootFilesJson =IpfsApi.getIpfsFileList("/",true,true);
+
+        //处理json数据
+        JSONObject rootFilesJsonObj = JSONObject.parseObject(rootFilesJson);
+        //获取文件(夹)列表json
+        JSONArray rootFilesJsonArray = rootFilesJsonObj.getJSONArray("Entries");
+
+        //根文件目录列表
+        List<HashMap<String,String>> rootFiles = new ArrayList<>();
+        for(int i=0;i<rootFilesJsonArray.size();i++){
+            //获取根目录文件（夹）
+            JSONObject fileJsonObj = rootFilesJsonArray.getJSONObject(i);
+            //添加根目录文件(夹)（将JSONObject转为HashMap<String,String>）
+            rootFiles.add(JsonProcess.convertJsonToHashMap(fileJsonObj));
+        }
+        String[] pathCell =path.split("/");
+        if(pathCell.length==0){
+            for(HashMap<String,String> rootFile:rootFiles){
+                resultFiles.addAllTempFiles(getCidLinks(rootFile.get("Hash")));
+            }
+        }else {
+
+
+            if(Objects.equals(pathCell[0], "")){
+                pathCell = Arrays.copyOfRange(pathCell, 1, pathCell.length);
+            }
+            //遍历根文件目录列表
+            for(int i=0;i<rootFiles.size();i++){
+                if(pathCell.length!=0) {
+                    if (rootFiles.get(i).get("Name").equals(pathCell[0])) {
+                        if (rootFiles.get(i).get("Type").equals("1")) {
+                            String tempCid = rootFiles.get(i).get("Hash");
+                            for(int j=0;j<pathCell.length;j++){
+                                if(j==pathCell.length-1){
+//                                    System.out.println("记录点1:"+pathCell.length);
+                                    resultFiles.addAllTempFiles(getCidLinks(tempCid));
+                                }else {
+                                    JSONObject jsonObject = JSONObject.parseObject(IpfsApi.getIpfsFileLinks(tempCid));
+                                    JSONArray ipfsFileLinksJsonObjObjArray = jsonObject.getJSONArray("Objects");
+                                    JSONArray ipfsFileLinksJsonArray = ipfsFileLinksJsonObjObjArray.getJSONObject(0).getJSONArray("Links");
+                                    List<HashMap<String,String>> ipfsFileLinks = JsonProcess.convertJsonToListHashMap(ipfsFileLinksJsonArray);
+                                    for (HashMap<String,String> ipfsFileLink : ipfsFileLinks){
+//                                        System.out.println("记录点2");
+                                        if(Objects.equals(ipfsFileLink.get("Type"), "1")){
+//                                            System.out.println("记录点3:"+ Arrays.toString(pathCell)+j);
+                                            if(Objects.equals(ipfsFileLink.get("Name"),pathCell[j+1])){
+//                                                System.out.println("记录点4:Name"+ipfsFileLink.get("Name")+" , CID:"+ipfsFileLink.get("Hash"));
+                                                tempCid = ipfsFileLink.get("Hash");
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        } else if (rootFiles.get(i).get("Type").equals("0")) {
+                            if (pathCell.length == 1) {
+                                List<HashMap<String, String>> file = new ArrayList<>();
+                                file.add(rootFiles.get(i));
+                                resultFiles.addAllTempFiles(file);
+                            }
+                        }
+                        break;
+                    }
+                }else {
+                    if (rootFiles.get(i).get("Type").equals("1")) {
+                        resultFiles.addAllTempFiles(getCidLinks(rootFiles.get(i).get("Hash")));
+                    } else if (rootFiles.get(i).get("Type").equals("0")) {
+                        List<HashMap<String, String>> file = new ArrayList<>();
+                        file.add(rootFiles.get(i));
+                        resultFiles.addAllTempFiles(file);
+                    }
+                }
+            }
+        }
+    return resultFiles.getTempFiles();
+    }
+
+    //临时测试
+    public static void main(String[] args){
+        ConfigManager.loadConfig("config.json");
+        List<HashMap<String,String>> fileLinks = new ArrayList<>();
+        try {
+            fileLinks = getCidLinks("QmbbfDGyDUDo45179pyBS8YxQerto4HW6Y8ZfvSBCo9kQY");
+//            fileLinks = getFileLinks("////");
+        }catch (Exception e){
+            e.printStackTrace();
+        }
+        System.out.println(fileLinks);
+    }
+
+
+    public static void getPinCids(){
+
+
+        System.out.print("请输入需要获取的目录(以/开头):");
+        String path = Main.scanner.nextLine();
+        List<HashMap<String,String>> fileList;
+        try {
+            System.out.println("\n开始获取文件列表");
+            fileList = getFileLinks(path);
+        } catch (Exception e) {
+            System.out.println("失败，原因："+e.getMessage()+"\n");
+            return;
+        }
+        if(fileList.size()==0){
+            System.out.println("没有找到文件，请检查路径是否正确。"+"\n");
+            return;
+        }
+        System.out.println("获取完毕,共"+fileList.size()+"个文件\n");
+        System.out.print("是否生成列表文件(y/n):");
+        while (true) {
+            String select = Main.scanner.nextLine();
+            select = select.toLowerCase();
+            if (select.equals("y") || select.equals("yes")) {
+                System.out.print("请输入文件名(不含后缀):");
+                String fileName = Main.scanner.nextLine();
+                JSONObject fileJson = new JSONObject();
+                JSONArray pins = new JSONArray();
+                for(HashMap<String,String> file:fileList){
+                    JSONObject jsonObject = new JSONObject();
+                    jsonObject.put("cid",file.get("Hash"));
+                    jsonObject.put("fileName",file.get("Name"));
+                    jsonObject.put("size",file.get("Size"));
+                    pins.add(jsonObject);
+                }
+                fileJson.put("pins",pins);
+
+                ConfigManager.saveConfig(AutoPins.pinsFile+fileName+".pins.json",fileJson);
+                System.out.println("列表文件保存成功。\n");
+
+                break;
+            } else if (select.equals("n") || select.equals("no")) {
+                System.out.println("已取消生成列表文件。\n");
+                break;
+            } else {
+                System.out.print("未知命令请重新输入,是否生成列表文件(y/n):");
+            }
+        }
+    }
+
     /**
      * 一键pin文件功能实现
      */
@@ -151,73 +374,168 @@ public class Commands {
         while (true) {
             JSONObject config =ConfigManager.getConfig("config.json")==null?new JSONObject():ConfigManager.getConfig("config.json");
             System.out.println("\n"+"当前配置：");
+
             System.out.println("#是否自动重试失败项目");
             System.out.println("autoRetryPins(布尔值) = "+ Objects.equals(config.get("autoRetryPins"),true)+"\n");
+
 //            System.out.println("autoRetryPins(布尔值) = "+config.get("autoRetryPins").equals("true")+"\n");
+
             System.out.println("#是否输出响应信息");
             System.out.println("outputReport(布尔值) = "+ Objects.equals(config.get("outputReport"),true)+"\n");
+
+            System.out.println("#IPFS Api Url");
+            System.out.println("ipfsApiUrl(字符串) = "+ (Objects.equals(config.get("ipfsApiUrl"),null)? IpfsApi.ifpsDefaultApiUrl:config.get("ipfsApiUrl"))+"\n");
+
             System.out.println("命令格式:[配置项] [修改值]");
             System.out.println("返回上一层请使用back命令"+"\n");
             System.out.print("请输入命令:");
             String command = Main.scanner.nextLine().toLowerCase();
             switch (command) {
-                case "":
-                    System.out.println("命令不能为空！");
-                    break;
-                case "back":
+                case "" -> System.out.println("命令不能为空！");
+                case "back" -> {
                     System.out.println();
                     return;
-                default:
+                }
+                default -> {
                     String[] commands = command.split(" ");
                     try {
-                        switch (commands[0]){
-                            case "autoretrypins":
-                                if(commands.length==2){
-                                    if(commands[1].equals("true")){
-                                        config.put("autoRetryPins",true);
-                                        ConfigManager.saveConfig("config.json",config);
-                                    }else if(commands[1].equals("false")){
-                                        config.put("autoRetryPins",false);
-                                        ConfigManager.saveConfig("config.json",config);
+                        switch (commands[0]) {
+                            case "autoretrypins" -> {
+                                if (commands.length == 2) {
+                                    if (commands[1].equals("true")) {
+                                        config.put("autoRetryPins", true);
+                                        ConfigManager.saveConfig("config.json", config);
+                                    } else if (commands[1].equals("false")) {
+                                        config.put("autoRetryPins", false);
+                                        ConfigManager.saveConfig("config.json", config);
                                     } else {
                                         System.out.println("正确格式(不区分大小写):autoRetryPins [布尔值]");
                                     }
-                                }else {
+                                } else {
                                     System.out.println("正确格式(不区分大小写):autoRetryPins [布尔值]");
                                 }
-                                break;
-                            case "outputreport":
-                                if(commands.length==2){
-                                    if(commands[1].equals("true")){
-                                        config.put("outputReport",true);
-                                        ConfigManager.saveConfig("config.json",config);
-                                    }else if(commands[1].equals("false")){
-                                        config.put("outputReport",false);
-                                        ConfigManager.saveConfig("config.json",config);
+                            }
+                            case "outputreport" -> {
+                                if (commands.length == 2) {
+                                    if (commands[1].equals("true")) {
+                                        config.put("outputReport", true);
+                                        ConfigManager.saveConfig("config.json", config);
+                                    } else if (commands[1].equals("false")) {
+                                        config.put("outputReport", false);
+                                        ConfigManager.saveConfig("config.json", config);
                                     } else {
                                         System.out.println("正确格式(不区分大小写):outputReport [布尔值]");
                                     }
-                                }else {
+                                } else {
                                     System.out.println("正确格式(不区分大小写):outputReport [布尔值]");
                                 }
-                                break;
-                            default:
-                                System.out.println("未知命令！");
+                            }
+                            case "ipfsapiurl" -> {
+                                if (commands.length == 2) {
+                                    config.put("ipfsApiUrl", commands[1]);
+                                    ConfigManager.saveConfig("config.json", config);
+                                } else {
+                                    System.out.println("正确格式(不区分大小写):ipfsApiUrl [URL字符串]");
+                                }
+                            }
+                            default -> System.out.println("未知命令！");
                         }
-                    }catch (Exception e){
+                    } catch (Exception e) {
                         System.out.println("未知命令！");
                     }
-
+                }
             }
         }
     }
 
     public static void help(){
-        System.out.println("命令列表：");
-        System.out.println("pins:自动批量pin文件到Crust");
-        System.out.println("config:修改配置文件");
-        System.out.println("help:显示帮助");
-        System.out.println("exit:退出程序");
+        System.out.println("\n命令列表：");
+        System.out.println("getcids:自动获取目录下所有文件CID列表(预发布版本可能会卡住；多线程？)，并生成.pins.json文件；");
+        System.out.println("pins:自动批量pin文件到Crust；");
+        System.out.println("config:修改配置文件；");
+        System.out.println("help:显示帮助；");
+        System.out.println("exit:退出程序。");
         System.out.println();
     }
+}
+class TempFiles{
+    private final Lock tempFilesLock=new ReentrantLock(true);
+
+    //等待被查询的列表
+    private final List<HashMap<String,String>> tempFiles =new ArrayList<>();
+
+    public void addAllTempFiles(List<HashMap<String,String>> tempFiles){
+        try {
+            tempFilesLock.lock();
+            this.tempFiles.addAll(tempFiles);
+        }finally {
+            tempFilesLock.unlock();
+        }
+    }
+
+    public void addTempFiles(HashMap<String,String> tempFile){
+
+        try {
+            tempFilesLock.lock();
+            this.tempFiles.add(tempFile);
+        }finally {
+            tempFilesLock.unlock();
+        }
+    }
+
+    public List<HashMap<String,String>> getTempFiles(){
+
+        try {
+            tempFilesLock.lock();
+            return new ArrayList<>(tempFiles);
+        }finally {
+            tempFilesLock.unlock();
+        }
+    }
+    public void clearTempFiles(){
+
+        try {
+            tempFilesLock.lock();
+            tempFiles.clear();
+        }finally {
+            tempFilesLock.unlock();
+        }
+    }
+    public void removeAllTempFiles(List<HashMap<String,String>> tempFiles){
+        try {
+            tempFilesLock.lock();
+            this.tempFiles.removeAll(tempFiles);
+        }finally {
+            tempFilesLock.unlock();
+        }
+    }
+
+    public HashMap<String,String> getAndRemoveTempFiles(int i){
+        try {
+            tempFilesLock.lock();
+            return new HashMap<String,String>(tempFiles.get(i));
+        }finally {
+            try {
+                tempFiles.remove(i);
+            }finally {
+                tempFilesLock.unlock();
+            }
+
+        }
+    }
+
+    public List<HashMap<String,String>> getAndClearTempFiles(){
+        try {
+            tempFilesLock.lock();
+            return new ArrayList<>(tempFiles);
+        }finally {
+            try {
+                tempFiles.clear();
+            }finally {
+                tempFilesLock.unlock();
+            }
+
+        }
+    }
+
 }

@@ -56,9 +56,11 @@ public class Main {
         while (true) {
             //欢迎信息
             System.out.println("欢迎使用IPFS Manager");
+            System.out.println("help查看帮助");
             System.out.print("请输入命令:");
             String command = scanner.nextLine().toLowerCase();
             switch (command) {
+                case "getcids" -> Commands.getPinCids();
                 case "pins" -> Commands.pins();
                 case "config" -> Commands.config();
                 case "exit" -> {
@@ -68,5 +70,4 @@ public class Main {
             }
         }
     }
-
 }

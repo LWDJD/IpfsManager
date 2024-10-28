@@ -32,7 +32,7 @@ public class Network {
     }
 
     // 不使用代理的POST请求
-    public static String pinPost(String url, String jsonBody) throws Exception {
+    public static String Post(String url, String jsonBody) throws Exception {
         // 创建HttpClient对象
         HttpClient client = HttpClient.newHttpClient();
 
@@ -40,6 +40,7 @@ public class Network {
         HttpRequest request = HttpRequest.newBuilder()
                 .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
                 .uri(URI.create(url))
+                .header("content-type","application/json;charset=UTF-8")
                 .build();
 
         // 发送请求，获取响应对象。

@@ -6,8 +6,8 @@ import com.alibaba.fastjson2.JSONObject;
 import java.util.*;
 
 public class JsonProcess {
+    // 将JSONObject转换为HashMap<String, String>
     public static HashMap<String, String> convertJsonToHashMap(JSONObject jsonObject) {
-        // 将JSONObject转换为HashMap<String, String>
         HashMap<String, String> stringMap = new HashMap<>();
         Set<String> keys = jsonObject.keySet();
         for (String key : keys) {
@@ -16,8 +16,9 @@ public class JsonProcess {
         }
         return stringMap;
     }
+
+    // 将JSONArray转换为List<HashMap<String, String>>
     public static List<HashMap<String,String>> convertJsonToListHashMap(JSONArray jsonArray){
-        // 将JSONArray转换为List<HashMap<String, String>>
         List<HashMap<String, String>> list = new ArrayList<>();
         for (int i = 0; i < jsonArray.size(); i++) {
             JSONObject jsonObject = jsonArray.getJSONObject(i);
@@ -28,6 +29,16 @@ public class JsonProcess {
             list.add(map);
         }
         return list;
+    }
+
+    public static HashMap<String,Object> ipfsApiV0LsJsonProcess(String jsonStr) {
+        JSONObject jsonObject = JSONObject.parseObject(jsonStr);
+        HashMap<String, Object> resultMap = new HashMap<>();
+        JSONObject objects = JSONObject.parseObject(jsonObject.getJSONArray("Objects").get(0).toString());
+        resultMap.put("Links", objects.getJSONArray("Links"));
+        resultMap.put("Hash", objects.get("Hash"));
+
+        return resultMap;
     }
 }
 

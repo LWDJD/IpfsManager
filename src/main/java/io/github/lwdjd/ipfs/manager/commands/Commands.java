@@ -15,6 +15,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class Commands {
 
+    //获取某个CID下的文件(夹)列表
     private static List<HashMap<String,String>> getCidLinks(String cid) throws InterruptedException {
         TempFiles tempFileLinks = new TempFiles();
         TempFiles resultFiles = new TempFiles();
@@ -44,39 +45,83 @@ public class Commands {
             int finalI = i;
             new Thread(() -> {
                 try {// 执行线程任务
-//                    System.out.println("线程 " + finalI + " 已运行");
+                    System.out.println("线程 " + finalI + " 已运行");
                     while (true) {
+//                        System.out.println("记录点1");
                         HashMap<String,String> Link;
                         try {
                             Link = tempFileLinks.getAndRemoveTempFiles(0);
                         } catch (Exception e) {
-                            break;
+                            try {
+                                Thread.sleep(1000);
+                            } catch (InterruptedException ex) {
+                                throw new RuntimeException(ex);
+                            }
+                            try {
+                                Link = tempFileLinks.getAndRemoveTempFiles(0);
+                            }catch (Exception e2){
+                                break;
+                            }
                         }
 
-
-                        JSONObject ipfsFileLinksJsonObj2 = JSONObject.parseObject(IpfsApi.getIpfsFileLinks(Link.get("Hash")));
-                        JSONArray ipfsFileLinksJsonObjObjArray2 = ipfsFileLinksJsonObj2.getJSONArray("Objects");
-                        JSONArray ipfsFileLinksJsonArray2 = ipfsFileLinksJsonObjObjArray2.getJSONObject(0).getJSONArray("Links");
-                        List<HashMap<String,String>> ipfsFileLinks2 = JsonProcess.convertJsonToListHashMap(ipfsFileLinksJsonArray2);
-
+                        List<HashMap<String,String>> ipfsFileLinks2;
+                        try {
+                            JSONObject ipfsFileLinksJsonObj2 = JSONObject.parseObject(IpfsApi.getIpfsFileLinks(Link.get("Hash")));
+                            JSONArray ipfsFileLinksJsonObjObjArray2 = ipfsFileLinksJsonObj2.getJSONArray("Objects");
+                            JSONArray ipfsFileLinksJsonArray2 = ipfsFileLinksJsonObjObjArray2.getJSONObject(0).getJSONArray("Links");
+                            ipfsFileLinks2 = JsonProcess.convertJsonToListHashMap(ipfsFileLinksJsonArray2);
+                        }catch (Exception e){
+                            if(Objects.equals(Link.get("ErrorN"),null)){
+                                Link.put("ErrorN","1");
+                                System.out.println("此文件(夹)获取失败"+Link.get("ErrorN")+"次"+" cid:"+Link.get("Hash")+"  文件(夹)名:"+Link.get("Name"));
+                                System.out.println("已添加至重试队列");
+                                tempFileLinks.addTempFiles(Link);
+                            }else {
+                                int errorN;
+                                try {
+                                    errorN = (Integer.parseInt(Link.get("ErrorN"))+1);
+                                }catch (Exception e2){
+                                    System.out.println("此文件(夹)获取失败"+" 未知 次"+" cid:"+Link.get("Hash")+"  文件(夹)名:"+Link.get("Name"));
+                                    System.out.println("已放弃");
+                                    continue;
+                                }
+                                //设置文件最多重试3次
+                                if ((errorN)>=3){
+                                    Link.put("ErrorN",String.valueOf(errorN));
+                                    System.out.println("此文件(夹)获取失败"+Link.get("ErrorN")+"次"+" cid:"+Link.get("Hash")+"  文件(夹)名:"+Link.get("Name"));
+                                    System.out.println("已放弃");
+                                }else {
+                                    Link.put("ErrorN",String.valueOf(errorN));
+                                    System.out.println("此文件(夹)获取失败"+Link.get("ErrorN")+"次"+" cid:"+Link.get("Hash")+"  文件(夹)名:"+Link.get("Name"));
+                                    System.out.println("已添加至重试队列");
+                                    tempFileLinks.addTempFiles(Link);
+                                }
+                            }
+                            continue;
+                        }
                         List<HashMap<String,String>> files = new ArrayList<>();
                         for(HashMap<String,String> ipfsFileLink:ipfsFileLinks2){
+//                            System.out.println("记录点2");
                             String fileName = ipfsFileLink.get("Name");
                             String fileType = ipfsFileLink.get("Type");
                             if(fileType.equals("1")){
+//                                System.out.println("记录点3");
                                 tempFileLinks.addTempFiles(ipfsFileLink);
                             }else if(fileType.equals("2")){
+//                                System.out.println("记录点4");
                                 if(!fileName.equals("")){
+//                                    System.out.println("记录点5");
                                     files.add(ipfsFileLink);
                                 }
                             }
                         }
                         if (files.size()!=0){
+//                            System.out.println("记录点6");
                             resultFiles.addAllTempFiles(files);
                         }
                     }
                 } finally {
-//                    System.out.println("线程 " + finalI + " 已结束");
+                    System.out.println("线程 " + finalI + " 已结束");
                     latch.countDown(); // 任务完成后计数减1
                 }
             }).start();
@@ -88,17 +133,26 @@ public class Commands {
         return resultFiles.getTempFiles();
     }
 
-    private static List<HashMap<String,String>> getFileLinks(String path) throws InterruptedException {
+    private static List<HashMap<String,String>> getFileLinks(String path) throws Exception {
         TempFiles tempFileLinks = new TempFiles();
         TempFiles resultFiles = new TempFiles();
 
         //获取根目录文件(夹)Json
-        String rootFilesJson =IpfsApi.getIpfsFileList("/",true,true);
+        String rootFilesJson = IpfsApi.getIpfsFileList("/",true,true);
+        if(rootFilesJson.equals("")){
+            throw new Exception("无返回数据，请检查ipfsApiUrl是否正确。");
+        }
+        JSONObject rootFilesJsonObj;
+        JSONArray rootFilesJsonArray ;
+        try {
+            //处理json数据
+            rootFilesJsonObj = JSONObject.parseObject(rootFilesJson);
+            //获取文件(夹)列表json
+            rootFilesJsonArray = rootFilesJsonObj.getJSONArray("Entries");
+        }catch (Exception e){
+            throw new Exception("解析根目录文件(夹)列表失败，请检查ipfsApiUrl是否正确，报错信息："+e.getMessage());
+        }
 
-        //处理json数据
-        JSONObject rootFilesJsonObj = JSONObject.parseObject(rootFilesJson);
-        //获取文件(夹)列表json
-        JSONArray rootFilesJsonArray = rootFilesJsonObj.getJSONArray("Entries");
 
         //根文件目录列表
         List<HashMap<String,String>> rootFiles = new ArrayList<>();
@@ -278,7 +332,7 @@ public class Commands {
                         return;
                     }
                     iid = Integer.parseInt(id);
-                    if (iid<1||iid>file.size()+1){
+                    if (iid<1||iid>file.size()){
                         System.out.print("输入有误，请重新");
                         continue;
                     }
@@ -294,7 +348,7 @@ public class Commands {
                 pins = JsonProcess.convertJsonToListHashMap(jsonArray);
 
             }catch (Exception e){
-                e.printStackTrace();
+//                e.printStackTrace();
                 System.out.println("文件加载失败,请检查文件json格式是否正确。");
                 System.out.println("""
                         格式：

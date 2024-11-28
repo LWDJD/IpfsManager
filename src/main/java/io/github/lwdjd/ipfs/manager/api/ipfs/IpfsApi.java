@@ -6,12 +6,22 @@ import io.github.lwdjd.ipfs.manager.JsonProcess;
 import io.github.lwdjd.ipfs.manager.config.ConfigManager;
 import io.github.lwdjd.ipfs.manager.network.Network;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Objects;
 
 public class IpfsApi {
     public static final String ifpsDefaultApiUrl = "http://127.0.0.1:5001/";
+    public static final long getCidMaxSize = 9223372036854775807L;
+    public static final long packagingSize = 1073741824L;
     public static final String apiV0FilesLs = "api/v0/files/ls";
     public static final String apiV0Ls = "api/v0/ls";
+    public static final String apiV0DagGet = "api/v0/dag/get";
+    public static final String apiV0DagPut ="api/v0/dag/put";
+    public static final String dagPb = "dag-pb";
+    public static final String dagJson = "dag-json";
+    public static final String dagCbor = "dag-cbor";
 
     /**
      * 获取IPFS文件列表
@@ -71,17 +81,77 @@ public class IpfsApi {
 
     }
 
-    public static void main(String[] args){
-        ConfigManager.loadConfig("config.json");
-        HashMap<String,Object> resultMap = JsonProcess.ipfsApiV0LsJsonProcess(getIpfsFileLinks("bafybeih4f5mo4so2kvbl5bxnrdgzcoahzjfbfk2fku72galglg2czbj45e"));
-        System.out.println(
-                JSONObject.parseObject(
-                        JSONArray.parseArray(
-                                resultMap.get("Links").toString()
-                        ).get(0).toString()
-                ).get("Type")
-        );
+    public static String getDAG(String cid){
+        String result = "";
+        String ipfsApiUrl = "";
+        JSONObject config =ConfigManager.getConfig("config.json")==null?new JSONObject():ConfigManager.getConfig("config.json");
+        if(config.get("ipfsApiUrl")==null||config.get("ipfsApiUrl")==""){
+            ipfsApiUrl = ifpsDefaultApiUrl;
+        }else {
+            ipfsApiUrl = config.get("ipfsApiUrl").toString();
+        }
 
-        System.out.println(resultMap.get("Hash"));
+
+        String sendData ="?arg="+cid+"&output-codec=dag-json";
+//        System.out.println(ipfsApiUrl+ apiV0DagGet +sendData);
+        try {
+            result = Network.Post(ipfsApiUrl+ apiV0DagGet +sendData,"");
+        } catch (Exception e) {
+            result = "Error : "+e.getMessage();
+        }
+        return result;
+    }
+
+    public static String putDAG_json(String storeCodec,String inputCodec,String fromData) throws Exception {
+        String ipfsApiUrl;
+        JSONObject config =ConfigManager.getConfig("config.json")==null?new JSONObject():ConfigManager.getConfig("config.json");
+        if(config.get("ipfsApiUrl")==null||config.get("ipfsApiUrl")==""){
+            ipfsApiUrl = ifpsDefaultApiUrl;
+        }else {
+            ipfsApiUrl = config.get("ipfsApiUrl").toString();
+        }
+        String url = ipfsApiUrl+apiV0DagPut+"?store-codec="+storeCodec+"&input-codec="+inputCodec;
+        JSONObject report = JSONObject.parseObject(Network.fromDataPost(url,fromData));
+        JSONObject cid = report.getJSONObject("Cid");
+        return cid.getString("/");
+    }
+    public static String putDAG_json(String storeCodec,String inputCodec,JSONObject fromData) throws Exception {
+        String ipfsApiUrl;
+        JSONObject config =ConfigManager.getConfig("config.json")==null?new JSONObject():ConfigManager.getConfig("config.json");
+        if(config.get("ipfsApiUrl")==null||config.get("ipfsApiUrl")==""){
+            ipfsApiUrl = ifpsDefaultApiUrl;
+        }else {
+            ipfsApiUrl = config.get("ipfsApiUrl").toString();
+        }
+        String url = ipfsApiUrl+apiV0DagPut+"?store-codec="+storeCodec+"&input-codec="+inputCodec;
+        JSONObject report = JSONObject.parseObject(Network.fromDataPost(url,fromData.toJSONString()));
+        JSONObject cid;
+        if(!Objects.equals(report.getJSONObject("Cid"),null)) {
+            cid = report.getJSONObject("Cid");
+        }else {
+            throw new RuntimeException("Error: "+report);
+        }
+        return cid.getString("/");
+    }
+    public static void main(String[] args) throws Exception {
+        ConfigManager.loadConfig("config.json");
+        JSONObject jsonObject = new JSONObject();
+        jsonObject.put("Data",new JSONObject());
+        jsonObject.put("Links",new JSONArray());
+        jsonObject.getJSONObject("Data").put("/",new JSONObject());
+        jsonObject.getJSONObject("Data").getJSONObject("/").put("bytes","CAE");
+
+        for(long i=0L;i<170L;i++) {
+            JSONObject file = new JSONObject();
+            JSONObject hash = new JSONObject();
+            hash.put("/", "bafybeiaekwwgyyrvvnx5fusu53xd6eno5o5qwgq56lln73m2xiks6jgqmi");
+            file.put("Hash", hash);
+            file.put("Name", "bafybeiaekwwgyyrvvnx5fusu53xd6eno5o5qwgq56lln73m2xiks6jgqmi");
+            file.put("Tsize", 4L);
+            jsonObject.getJSONArray("Links").add(file);
+        }
+//        System.out.println(jsonObject.toJSONString());
+        System.out.println(putDAG_json(dagPb,dagJson,jsonObject));
+
     }
 }

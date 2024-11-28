@@ -12,7 +12,7 @@ import java.util.concurrent.locks.ReentrantLock;
 
 public class AutoPins {
 //    public static Boolean isAutoRetryPins = false;
-    public static final String publicSign = "Bearer c3Vic3RyYXRlLWNUTTQ5elppcEE1cFRnSGVqWVFSU1dmQUdSYTFXQjlNNmZtODVBOTEzZVJwZkY1cEQ6MHg5YWI1MjM3OTAzNzljMGE3ZTFlNmFmYzBmNGI1ZmZhYzBkMjVjZTA1NGI2ZTgwYzIzZTViZDM5ZjAwZTNlZjRmMjU3NjMyYTBlNmFkNzdhY2MxYTMyMzM2Yzk0YWEwN2FlNGY1MmM0ZDE5MjkzYmJmZGRkZWJhNzI1MmExMzA4Zg==";
+    public static final String publicSign = "Bearer c3Vic3RyYXRlLWNUTTQ5elppcEE1cFRnSGVqWVFSU1dmQUdSYTFXQjlNNmZtODVBOTEzZVJwZkY1cEQ6MHg4OGMyOTEzMzdkOTY3N2Y1NGJiMDE4MTQ3OWI0NTc0NTJlNDk3OWVkMGQyMDgwZjFlYTMxYjMxZjJmYzBiMjBmYTY5OTcyNjlhODY0MjJjODlkODRkOGNjMDI2ODJlZjdlMTc5ODYyYzljZTI5NTkyNTk4MWM5MWQ1YzRlZjM4Zg==";
     public static final String crustPinUrl = "https://pin.crustcode.com/psa/pins";
     public static final String pinsFile = "pinsList/";
     //监听器列表
@@ -82,8 +82,7 @@ public class AutoPins {
      */
     public static String sendPin(String cid,String fileName,String sign) throws Exception {
 
-        String json = "{\"cid\":\""+cid+"\",\"name\":\""+fileName+"\"}";
-
+        String json = "{\"cid\":\""+cid+"\"}";
         return Network.pinPost(crustPinUrl, json,sign);
     }
 

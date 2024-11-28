@@ -20,7 +20,7 @@ public class Main {
      */
     private static void init(){
         ConfigManager.loadConfig("config.json");
-
+        scanner.useDelimiter("\n");
 
         //添加PINS监听器
         AutoPins.addPinsListener((int total,int pinned,String cid,String fileName,String report)->{
@@ -63,6 +63,7 @@ public class Main {
                 case "getcids" -> Commands.getPinCids();
                 case "pins" -> Commands.pins();
                 case "config" -> Commands.config();
+                case "packaging" -> Commands.packaging();
                 case "exit" -> {
                     return;
                 }

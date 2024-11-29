@@ -726,6 +726,7 @@ public class Commands {
                 packageList.add(temp);
             }
         }
+        System.out.println(packageDagJson.getJSONArray("Links").size()!=0);
         if(packageDagJson.getJSONArray("Links").size()!=0){
             String tempCid = "";
             for(int i=0;i<3;i++) {
@@ -746,7 +747,7 @@ public class Commands {
                 tempPackage.put("cid",tempCid);
                 tempPackage.put("fileName",tempCid);
                 tempPackage.put("size", String.valueOf(packageSize));
-                blockList.add(tempPackage);
+                packageList.add(tempPackage);
             }
         }
         System.out.println("已结束打包");

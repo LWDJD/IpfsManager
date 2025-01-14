@@ -2,23 +2,21 @@ package io.github.lwdjd.ipfs.manager.api.ipfs;
 
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
-import io.github.lwdjd.ipfs.manager.JsonProcess;
 import io.github.lwdjd.ipfs.manager.config.ConfigManager;
 import io.github.lwdjd.ipfs.manager.network.Network;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Objects;
 
 public class IpfsApi {
-    public static final String ifpsDefaultApiUrl = "http://127.0.0.1:5001/";
-    public static final long getCidMaxSize = 9223372036854775807L;
+    public static final String ifpsDefaultApiUrl = "http://127.0.0.1:5001";
+    public static final long getCidMaxSize = 1073741824L;
     public static final long packagingSize = 1073741824L;
-    public static final String apiV0FilesLs = "api/v0/files/ls";
-    public static final String apiV0Ls = "api/v0/ls";
-    public static final String apiV0DagGet = "api/v0/dag/get";
-    public static final String apiV0DagPut ="api/v0/dag/put";
+    public static final int maxPreheatThreads = 64;
+    public static final long maxPreheatBlockSize = 1048576L*2;
+    public static final String apiV0FilesLs = "/api/v0/files/ls";
+    public static final String apiV0Ls = "/api/v0/ls";
+    public static final String apiV0DagGet = "/api/v0/dag/get";
+    public static final String apiV0DagPut ="/api/v0/dag/put";
     public static final String dagPb = "dag-pb";
     public static final String dagJson = "dag-json";
     public static final String dagCbor = "dag-cbor";

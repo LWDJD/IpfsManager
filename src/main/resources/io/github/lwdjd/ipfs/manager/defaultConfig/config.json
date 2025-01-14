@@ -1,1 +1,1 @@
-{"autoRetryPins":true,"outputReport":true}
+{"ipfsApiUrl":"http://localhost:5001","autoRetryPins":true,"outputReport":true,"getCidMaxSize":1073741824,"maxPreheatBlockSize":2097152,"maxPreheatThreads":64,"packagingSize":1073741824}

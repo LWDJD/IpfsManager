@@ -1,18 +1,50 @@
 package io.github.lwdjd.ipfs.manager.network;
 
 
+import io.github.lwdjd.ipfs.manager.process.StorageFormatter;
 import okhttp3.*;
 
-import java.io.File;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class Network {
+    /**
+     * 不使用代理发送GET请求获取请求头
+     * @param url 请求的url
+     * @return 返回请求的结果
+     */
+    public static Headers getHeaders(String url) {
+        OkHttpClient client = new OkHttpClient().newBuilder()
+                .connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+                .build();
+
+        Request request = new Request.Builder()
+                .url(url)
+                .build();
+        try (Response response = client.newCall(request).execute()) {
+            // 确保响应状态码为200，表示请求成功
+            if (response.isSuccessful()) {
+                // 直接返回响应头
+                return response.headers();
+            } else {
+                throw new RuntimeException("Error: " + response.code());
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Error: get headers failed", e);
+        }finally {
+            client.dispatcher().cancelAll();//取消所有请求
+            client.connectionPool().evictAll(); // 移除所有连接
+        }
+        // 关闭响应体，释放连接
+    }
+
     /**
      * 不使用代理发送GET请求
      * @param url 请求的url
@@ -283,51 +315,308 @@ public class Network {
             throw new Exception("请求被中断", e);
         }
     }
+    public static void fakeDownload(String url,AtomicLong location){
+        OkHttpClient client = new OkHttpClient().newBuilder()
+                .connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .build();
 
-    public static void main(String[] args) throws Exception {
-        System.out.println(fromDataPost("http://127.0.0.1:5001/api/v0/dag/put?store-codec=dag-pb&input-codec=dag-json","{\n" +
-                "    \"Data\": {\n" +
-                "        \"/\": {\n" +
-                "            \"bytes\": \"CAE\"\n" +
-                "        }\n" +
-                "    },\n" +
-                "    \"Links\": [\n" +
-                "        {\n" +
-                "            \"Hash\": {\n" +
-                "                \"/\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\"\n" +
-                "            },\n" +
-                "            \"Name\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\",\n" +
-                "            \"Tsize\": 4654398768647097000\n" +
-                "        },\n" +
-                "        {\n" +
-                "            \"Hash\": {\n" +
-                "                \"/\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\"\n" +
-                "            },\n" +
-                "            \"Name\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\",\n" +
-                "            \"Tsize\": 4654398768647097000\n" +
-                "        },\n" +
-                "        {\n" +
-                "            \"Hash\": {\n" +
-                "                \"/\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\"\n" +
-                "            },\n" +
-                "            \"Name\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\",\n" +
-                "            \"Tsize\": 4654398768647097000\n" +
-                "        },\n" +
-                "        {\n" +
-                "            \"Hash\": {\n" +
-                "                \"/\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\"\n" +
-                "            },\n" +
-                "            \"Name\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\",\n" +
-                "            \"Tsize\": 4654398768647097000\n" +
-                "        },\n" +
-                "        {\n" +
-                "            \"Hash\": {\n" +
-                "                \"/\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\"\n" +
-                "            },\n" +
-                "            \"Name\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\",\n" +
-                "            \"Tsize\": 4654398768647097000\n" +
-                "        }\n" +
-                "    ]\n" +
-                "}\n"));
+        Request request = new Request.Builder()
+                .url(url)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            // 确保响应状态码为200，表示请求成功
+            if (response.isSuccessful()) {
+                ResponseBody body = response.body();
+                if (body != null) {
+
+//                    final AtomicLong temp = new AtomicLong(0);
+//                    FilePreheater.location.put(location,temp);
+                    // 读取响应体中的数据记录数量并丢弃
+                    body.byteStream().transferTo(new OutputStream() {
+                        @Override
+                        public void write(int b){
+                            location.incrementAndGet();
+                        }
+
+                    });//读取流，但不存储。
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }finally {
+            client.dispatcher().cancelAll();//取消所有请求
+            client.connectionPool().evictAll(); // 移除所有连接
+        }
     }
+
+    public static void fakeDownload(String url ,Headers headers,AtomicLong location){
+        OkHttpClient client = new OkHttpClient().newBuilder()
+                .connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .build();
+
+        Request request = new Request.Builder()
+                .url(url)
+                .headers(headers)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            // 确保响应状态码为200，表示请求成功
+            if (response.isSuccessful()) {
+                ResponseBody body = response.body();
+                if (body != null) {
+
+//                    final AtomicLong temp = new AtomicLong(0);
+//                    FilePreheater.location.put(location,temp);
+                    // 读取响应体中的数据记录数量并丢弃
+                    body.byteStream().transferTo(new OutputStream() {
+                        @Override
+                        public void write(int b){
+                            location.incrementAndGet();
+                        }
+                    });//读取流，但不存储。
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }finally {
+            client.dispatcher().cancelAll();//取消所有请求
+            client.connectionPool().evictAll(); // 移除所有连接
+        }
+    }
+
+    public static void fakeDownload(String url,long startByte,long endByte,AtomicLong location){
+        OkHttpClient client = new OkHttpClient().newBuilder()
+                .connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .build();
+
+        Request request = new Request.Builder()
+                .url(url)
+                .header("Range", "bytes=" + startByte + "-" + endByte)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            // 确保响应状态码为200，表示请求成功
+            if (response.isSuccessful()) {
+                ResponseBody body = response.body();
+                if (body != null) {
+
+//                    final AtomicLong temp = new AtomicLong(0);
+//                    FilePreheater.location.put(location,temp);
+                    // 读取响应体中的数据记录数量并丢弃
+                    body.byteStream().transferTo(new OutputStream() {
+                        @Override
+                        public void write(int b){
+                            location.incrementAndGet();
+                        }
+
+                    });//读取流，但不存储。
+
+                }
+            }
+        } catch (IOException e) {
+//            e.printStackTrace();
+        }finally {
+            client.dispatcher().cancelAll();//取消所有请求
+            client.connectionPool().evictAll(); // 移除所有连接
+        }
+    }
+
+    public static void fakeDownload(String url, long startByte, long endByte, Headers headers, AtomicLong location){
+        OkHttpClient client = new OkHttpClient().newBuilder()
+                .connectTimeout(20, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .build();
+
+        Request request = new Request.Builder()
+                .url(url)
+                .headers(headers)
+                .header("Range", "bytes=" + startByte + "-" + endByte)
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            // 确保响应状态码为200，表示请求成功
+            if (response.isSuccessful()) {
+                ResponseBody body = response.body();
+                if (body != null) {
+
+//                    final AtomicLong temp = new AtomicLong(0);
+//                    FilePreheater.location.put(location,temp);
+                    // 读取响应体中的数据记录数量并丢弃
+                    body.byteStream().transferTo(new OutputStream() {
+                        @Override
+                        public void write(int b){
+                            location.incrementAndGet();
+                        }
+                    });//读取流，但不存储。
+                }
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }finally {
+            client.dispatcher().cancelAll();//取消所有请求
+            client.connectionPool().evictAll(); // 移除所有连接
+        }
+    }
+
+
+    public static void main(String[] args){
+        try {
+            Headers a = getHeaders("https://gw.crustgw.work/ipfs/bafybeihqwtb6y2ta3zeudfcueiamh465w4qbcmwwrnzmudpo5wyvqc3po4");
+            System.out.println("Size = "+a.get("content-length"));
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    //测试使用
+//    public static void main(String[] args){
+//        int a = 1;
+//        for (int i = 0; i<a; i++){
+//            int finalI = i;
+//            new Thread(()-> {
+//                String ThName = "A"+finalI;
+//                AtomicLong location = new AtomicLong(0);
+//                if(FilePreheater.locations.containsKey(ThName)){
+//                    location = FilePreheater.locations.get(ThName);
+//                }else {
+//                    FilePreheater.locations.put(ThName,location);
+//                }
+//                fakeDownload("https://gw.crustgw.work/ipfs/bafybeihqwtb6y2ta3zeudfcueiamh465w4qbcmwwrnzmudpo5wyvqc3po4",100,2000000,location);
+//                System.out.println(ThName+" 下载结束");
+//            }).start();
+//            try {
+//                Thread.sleep(50);
+//            } catch (InterruptedException e) {
+//                throw new RuntimeException(e);
+//            }
+//        }
+//        for (int i = 0; i<a; i++){
+//            int finalI = i;
+//            new Thread(()-> {
+//                String ThName = "B"+finalI;
+//                AtomicLong location = new AtomicLong(0);
+//                if(FilePreheater.locations.containsKey(ThName)){
+//                    location = FilePreheater.locations.get(ThName);
+//                }else {
+//                    FilePreheater.locations.put(ThName,location);
+//                }
+//                fakeDownload("https://gw.crustgw.org/ipfs/bafybeihqwtb6y2ta3zeudfcueiamh465w4qbcmwwrnzmudpo5wyvqc3po4",100,20000000,location);
+//                System.out.println(ThName+" 下载结束");
+//            }).start();
+//            try {
+//                Thread.sleep(50);
+//            } catch (InterruptedException e) {
+//                throw new RuntimeException(e);
+//            }
+//        }
+//        for (int i = 0; i<a; i++){
+//            int finalI = i;
+//            new Thread(()-> {
+//                String ThName = "C"+finalI;
+//                AtomicLong location = new AtomicLong(0);
+//                if(FilePreheater.locations.containsKey(ThName)){
+//                    location = FilePreheater.locations.get(ThName);
+//                }else {
+//                    FilePreheater.locations.put(ThName,location);
+//                }
+//                fakeDownload("https://gw.crust-gateway.xyz/ipfs/bafybeihqwtb6y2ta3zeudfcueiamh465w4qbcmwwrnzmudpo5wyvqc3po4",100,200000000,location);
+//
+//            }).start();
+//            try {
+//                Thread.sleep(50);
+//            } catch (InterruptedException e) {
+//                throw new RuntimeException(e);
+//            }
+//        }
+//        for (int i = 0; i<a; i++){
+//            int finalI = i;
+//            new Thread(()-> {
+//                String ThName = "D"+finalI;
+//                AtomicLong location = new AtomicLong(0);
+//                if(FilePreheater.locations.containsKey(ThName)){
+//                    location = FilePreheater.locations.get(ThName);
+//                }else {
+//                    FilePreheater.locations.put(ThName,location);
+//                }
+//                fakeDownload("https://gw.crust-gateway.com/ipfs/bafybeihqwtb6y2ta3zeudfcueiamh465w4qbcmwwrnzmudpo5wyvqc3po4",100,20000000,location);
+//                System.out.println(ThName+" 下载结束");
+//            }).start();
+//            try {
+//                Thread.sleep(50);
+//            } catch (InterruptedException e) {
+//                throw new RuntimeException(e);
+//            }
+//        }
+//
+//
+////        new Thread(()-> fakeDownload("https://gw.crustgw.work/ipfs/bafybeihqwtb6y2ta3zeudfcueiamh465w4qbcmwwrnzmudpo5wyvqc3po4","A")).start();
+////        new Thread(()-> fakeDownload("https://gw.crustgw.org/ipfs/bafybeihqwtb6y2ta3zeudfcueiamh465w4qbcmwwrnzmudpo5wyvqc3po4","B")).start();
+////        new Thread(()-> fakeDownload("https://gw.crust-gateway.xyz/ipfs/bafybeihqwtb6y2ta3zeudfcueiamh465w4qbcmwwrnzmudpo5wyvqc3po4","C")).start();
+////        new Thread(()-> fakeDownload("https://gw.crust-gateway.com/ipfs/bafybeihqwtb6y2ta3zeudfcueiamh465w4qbcmwwrnzmudpo5wyvqc3po4","D")).start();
+//        new Thread(()-> {
+//            while (System.currentTimeMillis() != -76745){
+//                try {
+//                    Thread.sleep(5000);
+//                } catch (InterruptedException e) {
+//                    throw new RuntimeException(e);
+//                }
+//                System.out.println("当前已下载大小");
+//                ConcurrentHashMap<String, AtomicLong> b = new ConcurrentHashMap<>(FilePreheater.locations);
+//                for(String key : b.keySet()){
+//                    System.out.println("name: "+key+"    location: "+ StorageFormatter.formatBytes(b.get(key).get()));
+//                }
+//            }
+//        }).start();
+//    }
+
+//    public static void main(String[] args) throws Exception {
+//        System.out.println(fromDataPost("http://127.0.0.1:5001/api/v0/dag/put?store-codec=dag-pb&input-codec=dag-json","{\n" +
+//                "    \"Data\": {\n" +
+//                "        \"/\": {\n" +
+//                "            \"bytes\": \"CAE\"\n" +
+//                "        }\n" +
+//                "    },\n" +
+//                "    \"Links\": [\n" +
+//                "        {\n" +
+//                "            \"Hash\": {\n" +
+//                "                \"/\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\"\n" +
+//                "            },\n" +
+//                "            \"Name\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\",\n" +
+//                "            \"Tsize\": 4654398768647097000\n" +
+//                "        },\n" +
+//                "        {\n" +
+//                "            \"Hash\": {\n" +
+//                "                \"/\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\"\n" +
+//                "            },\n" +
+//                "            \"Name\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\",\n" +
+//                "            \"Tsize\": 4654398768647097000\n" +
+//                "        },\n" +
+//                "        {\n" +
+//                "            \"Hash\": {\n" +
+//                "                \"/\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\"\n" +
+//                "            },\n" +
+//                "            \"Name\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\",\n" +
+//                "            \"Tsize\": 4654398768647097000\n" +
+//                "        },\n" +
+//                "        {\n" +
+//                "            \"Hash\": {\n" +
+//                "                \"/\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\"\n" +
+//                "            },\n" +
+//                "            \"Name\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\",\n" +
+//                "            \"Tsize\": 4654398768647097000\n" +
+//                "        },\n" +
+//                "        {\n" +
+//                "            \"Hash\": {\n" +
+//                "                \"/\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\"\n" +
+//                "            },\n" +
+//                "            \"Name\": \"bafybeif54ksdqydq3rliwjqps3wup6nulfbbrzgcvrrd5cgqqvps46eyma\",\n" +
+//                "            \"Tsize\": 4654398768647097000\n" +
+//                "        }\n" +
+//                "    ]\n" +
+//                "}\n"));
+//    }
 }

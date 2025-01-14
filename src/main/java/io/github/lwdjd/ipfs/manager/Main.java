@@ -3,6 +3,7 @@ package io.github.lwdjd.ipfs.manager;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
+import com.alibaba.fastjson2.JSONWriter;
 import io.github.lwdjd.ipfs.manager.commands.Commands;
 import io.github.lwdjd.ipfs.manager.config.ConfigManager;
 import io.github.lwdjd.ipfs.manager.crust.AutoPins;
@@ -20,8 +21,9 @@ public class Main {
      */
     private static void init(){
         ConfigManager.loadConfig("config.json");
+        ConfigManager.loadConfig("getaway.json");
+        //设置只有换行符可以结束输入
         scanner.useDelimiter("\n");
-
         //添加PINS监听器
         AutoPins.addPinsListener((int total,int pinned,String cid,String fileName,String report)->{
             //处理PINS结果
@@ -29,14 +31,14 @@ public class Main {
                 try {
 
                     JSONObject reportJsonObject = JSON.parseObject(report);
-                    JSONArray pin = reportJsonObject.getJSONArray("Pin");
+//                    JSONArray pin = reportJsonObject.getJSONArray("Pin");
                     if(reportJsonObject.get("requestid")==null||reportJsonObject.get("requestid")==""){
                         throw new Exception("未成功固定");
                     }
                     System.out.print("成功");
                 } catch (Exception e) {
                     HashMap<String,String> item = new HashMap<>();
-                    item.put("cid",cid);
+                    item.put("fileCid",cid);
                     item.put("fileName",fileName);
                     AutoPins.retryListAdd(item);
                     System.out.print("失败");
@@ -62,8 +64,9 @@ public class Main {
             switch (command) {
                 case "getcids" -> Commands.getPinCids();
                 case "pins" -> Commands.pins();
-                case "config" -> Commands.config();
                 case "packaging" -> Commands.packaging();
+                case "preheat" -> Commands.preheat();
+                case "config" -> Commands.config();
                 case "exit" -> {
                     return;
                 }

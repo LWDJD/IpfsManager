@@ -2,7 +2,8 @@ package io.github.lwdjd.ipfs.manager.commands;
 
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
-import io.github.lwdjd.ipfs.manager.JsonProcess;
+import io.github.lwdjd.ipfs.manager.network.FilePreheater;
+import io.github.lwdjd.ipfs.manager.process.JsonProcess;
 import io.github.lwdjd.ipfs.manager.Main;
 import io.github.lwdjd.ipfs.manager.api.ipfs.IpfsApi;
 import io.github.lwdjd.ipfs.manager.config.ConfigManager;
@@ -320,7 +321,9 @@ public class Commands {
         System.out.println("数量："+fileLinks.size());
     }
 
-
+    /**
+     * 获取文件块CID功能
+     */
     public static void getPinCids(){
         badCidLock.lock();
         try {
@@ -357,18 +360,19 @@ public class Commands {
             if (select.equals("y") || select.equals("yes")) {
                 System.out.print("请输入文件名(不含后缀):");
                 String fileName = Main.scanner.nextLine();
-                JSONObject fileJson = new JSONObject();
+//                JSONObject fileJson = new JSONObject();
                 JSONArray pins = new JSONArray();
                 for(HashMap<String,String> file:fileList){
                     JSONObject jsonObject = new JSONObject();
-                    jsonObject.put("cid",file.get("Hash"));
+                    jsonObject.put("fileCid",file.get("Hash"));
                     jsonObject.put("fileName",file.get("Name"));
                     jsonObject.put("size",file.get("Size"));
                     pins.add(jsonObject);
                 }
-                fileJson.put("pins",pins);
-
-                ConfigManager.saveConfig(AutoPins.pinsFile+fileName+".pins.json",fileJson);
+//                fileJson.put("pins",pins);
+//
+//                ConfigManager.saveConfig(AutoPins.pinsFile+fileName+".pins.json",fileJson);
+                ConfigManager.savePinsConfig(AutoPins.pinsFile+fileName+".pins.json",pins);
                 System.out.println("已成功列表文件保存成功。\n");
 
                 break;
@@ -387,18 +391,20 @@ public class Commands {
                 if (select.equals("y") || select.equals("yes")) {
                     System.out.print("请输入文件名(不含后缀):");
                     String fileName = Main.scanner.nextLine();
-                    JSONObject fileJson = new JSONObject();
+//                    JSONObject fileJson = new JSONObject();
                     JSONArray pins = new JSONArray();
                     for(HashMap<String, String> file:badCid){
                         JSONObject jsonObject = new JSONObject();
-                        jsonObject.put("cid",file.get("Hash"));
+                        jsonObject.put("fileCid",file.get("Hash"));
                         jsonObject.put("fileName",file.get("Name"));
                         jsonObject.put("size",file.get("Size"));
                         pins.add(jsonObject);
                     }
-                    fileJson.put("pins",pins);
+//                    fileJson.put("pins",pins);
+//
+//                    ConfigManager.saveConfig(AutoPins.pinsFile+fileName+".pins.json",fileJson);
 
-                    ConfigManager.saveConfig(AutoPins.pinsFile+fileName+".pins.json",fileJson);
+                    ConfigManager.savePinsConfig(AutoPins.pinsFile+fileName+".pins.json",pins);
                     System.out.println("已失败列表文件保存成功。\n");
 
                     break;
@@ -413,7 +419,7 @@ public class Commands {
     }
 
     /**
-     * 一键pin文件功能实现
+     * 自动pin文件功能
      */
     public static void pins(){
         List<HashMap<String,String>> pins;
@@ -447,9 +453,9 @@ public class Commands {
                 }
             }
             try {
-                ConfigManager.loadConfig(AutoPins.pinsFile+file.get(iid-1));
-                JSONObject jsonObject = ConfigManager.getConfig(AutoPins.pinsFile+file.get(iid-1));
-                JSONArray jsonArray = jsonObject.getJSONArray("pins");
+//                ConfigManager.loadConfig(AutoPins.pinsFile+file.get(iid-1));
+//                JSONObject jsonObject = ConfigManager.getConfig(AutoPins.pinsFile+file.get(iid-1));
+                JSONArray jsonArray = ConfigManager.readPinsConfig(AutoPins.pinsFile+file.get(iid-1));
                 pins = JsonProcess.convertJsonToListHashMap(jsonArray);
 
             }catch (Exception e){
@@ -457,22 +463,20 @@ public class Commands {
                 System.out.println("文件加载失败,请检查文件json格式是否正确。");
                 System.out.println("""
                         格式：
-                        {
-                             "pins": [
+                        [
                                  {
-                                     "cid": "Qm...",
+                                     "fileCid": "Qm...",
                                      "fileName": "文件名"
                                  },
                                  {
-                                     "cid": "Qm...",
+                                     "fileCid": "bafybei...",
                                      "fileName": "文件名"
                                  },
                                  {
-                                     "cid": "Qm...",
+                                     "fileCid": "Qm...",
                                      "fileName": "文件名"
                                  }
-                             ]
-                        }"""
+                        ]"""
                 );
                 return;
             }
@@ -527,6 +531,9 @@ public class Commands {
         }
     }
 
+    /**
+     * 自动打包分块功能
+     */
     public static void packaging(){
         JSONObject config =ConfigManager.getConfig("config.json")==null?new JSONObject():ConfigManager.getConfig("config.json");
         List<HashMap<String,String>> blockList;
@@ -562,9 +569,9 @@ public class Commands {
                 }
             }
             try {
-                ConfigManager.loadConfig(AutoPins.pinsFile+file.get(iid-1));
-                JSONObject jsonObject = ConfigManager.getConfig(AutoPins.pinsFile+file.get(iid-1));
-                JSONArray jsonArray = jsonObject.getJSONArray("pins");
+//                ConfigManager.loadConfig(AutoPins.pinsFile+file.get(iid-1));
+//                JSONObject jsonObject = ConfigManager.getConfig(AutoPins.pinsFile+file.get(iid-1));
+                JSONArray jsonArray = ConfigManager.readPinsConfig(AutoPins.pinsFile+file.get(iid-1));
                 blockList = JsonProcess.convertJsonToListHashMap(jsonArray);
 
             }catch (Exception e){
@@ -572,25 +579,23 @@ public class Commands {
                 System.out.println("文件加载失败,请检查文件json格式是否正确。");
                 System.out.println("""
                         格式：
-                        {
-                             "pins": [
+                        [
                                  {
-                                     "cid": "Qm...",
+                                     "fileCid": "Qm...",
                                      "fileName": "文件名",
                                      "Size": 文件大小(字节)
                                  },
                                  {
-                                     "cid": "be...",
+                                     "fileCid": "bafybei...",
                                      "fileName": "文件名",
                                      "Size": 文件大小(字节)
                                  },
                                  {
-                                     "cid": "Qm...",
+                                     "fileCid": "Qm...",
                                      "fileName": "文件名",
                                      "Size": 文件大小(字节)
                                  }
-                             ]
-                        }"""
+                        ]"""
                 );
                 return;
             }
@@ -612,7 +617,7 @@ public class Commands {
         packageDagJson.put("Links",new JSONArray());
         packageDagJson.getJSONObject("Data").put("/",new JSONObject());
         packageDagJson.getJSONObject("Data").getJSONObject("/").put("bytes","CAE");
-        long packageSize = 1200L;
+        long packageSize = 5000L;
         long totalSize = Objects.equals(config.getLong("packagingSize"),null)? IpfsApi.packagingSize:config.getLong("packagingSize");
         while (true) {
             HashMap<String, String> block;
@@ -629,7 +634,7 @@ public class Commands {
                 if (size>totalSize) {
                     HashMap<String, String> temp = new HashMap<>();
                     System.out.println("文件" + block.get("fileName") + "大小" + size + "超过限制，已单独作为一个包");
-                    temp.put("cid", block.get("cid"));
+                    temp.put("fileCid", block.get("fileCid"));
                     temp.put("fileName", block.get("fileName"));
                     temp.put("size", block.get("size"));
                     packageList.add(temp);
@@ -638,9 +643,9 @@ public class Commands {
                         if (packageSize + size <= totalSize){
                             JSONObject temp = new JSONObject();
                             JSONObject hash = new JSONObject();
-                            hash.put("/", block.get("cid"));
+                            hash.put("/", block.get("fileCid"));
                             temp.put("Hash", hash);
-                            temp.put("Name", Objects.equals(block.get("fileName"), null)?block.get("cid"):block.get("fileName"));
+                            temp.put("Name", Objects.equals(block.get("fileName"), null)?block.get("fileCid"):block.get("fileName"));
                             temp.put("Tsize",  Long.parseLong(block.get("size")));
                             packageSize = packageSize + size;
                             packageDagJson.getJSONArray("Links").add(temp);
@@ -661,7 +666,7 @@ public class Commands {
                                 System.out.println("已放弃此包");
                             }else {
                                 HashMap<String,String> tempPackage = new HashMap<>();
-                                tempPackage.put("cid",tempCid);
+                                tempPackage.put("fileCid",tempCid);
                                 tempPackage.put("fileName",tempCid);
                                 tempPackage.put("size", String.valueOf(packageSize));
                                 packageList.add(tempPackage);
@@ -673,11 +678,11 @@ public class Commands {
                             packageDagJson.getJSONObject("Data").getJSONObject("/").put("bytes","CAE");
                             JSONObject temp = new JSONObject();
                             JSONObject hash = new JSONObject();
-                            hash.put("/", block.get("cid"));
+                            hash.put("/", block.get("fileCid"));
                             temp.put("Hash", hash);
-                            temp.put("Name", Objects.equals(block.get("fileName"), null)?block.get("cid"):block.get("fileName"));
+                            temp.put("Name", Objects.equals(block.get("fileName"), null)?block.get("fileCid"):block.get("fileName"));
                             temp.put("Tsize",  Long.parseLong(block.get("size")));
-                            packageSize = 1200L + size;
+                            packageSize = 5000L + size;
                             packageDagJson.getJSONArray("Links").add(temp);
                         }
                     }else {
@@ -697,7 +702,7 @@ public class Commands {
                             System.out.println("已放弃此包");
                         }else {
                             HashMap<String,String> tempPackage = new HashMap<>();
-                            tempPackage.put("cid",tempCid);
+                            tempPackage.put("fileCid",tempCid);
                             tempPackage.put("fileName",tempCid);
                             tempPackage.put("size", String.valueOf(packageSize));
                             blockList.add(0,tempPackage);
@@ -709,9 +714,9 @@ public class Commands {
                         packageDagJson.getJSONObject("Data").getJSONObject("/").put("bytes","CAE");
                         JSONObject temp = new JSONObject();
                         JSONObject hash = new JSONObject();
-                        hash.put("/", block.get("cid"));
+                        hash.put("/", block.get("fileCid"));
                         temp.put("Hash", hash);
-                        temp.put("Name", Objects.equals(block.get("fileName"), null)?block.get("cid"):block.get("fileName"));
+                        temp.put("Name", Objects.equals(block.get("fileName"), null)?block.get("fileCid"):block.get("fileName"));
                         temp.put("Tsize", Long.parseLong(block.get("size")));
                         packageSize = 1200L + size;
                         packageDagJson.getJSONArray("Links").add(temp);
@@ -720,7 +725,7 @@ public class Commands {
             }else {
                 System.out.println("文件" + block.get("fileName") + "未知大小，已单独作为一个包");
                 HashMap<String, String> temp = new HashMap<>();
-                temp.put("cid", block.get("cid"));
+                temp.put("fileCid", block.get("fileCid"));
                 temp.put("fileName", block.get("fileName"));
                 temp.put("size", block.get("size"));
                 packageList.add(temp);
@@ -744,7 +749,7 @@ public class Commands {
                 System.out.println("已放弃此包");
             }else {
                 HashMap<String,String> tempPackage = new HashMap<>();
-                tempPackage.put("cid",tempCid);
+                tempPackage.put("fileCid",tempCid);
                 tempPackage.put("fileName",tempCid);
                 tempPackage.put("size", String.valueOf(packageSize));
                 packageList.add(tempPackage);
@@ -753,7 +758,7 @@ public class Commands {
         System.out.println("已结束打包");
         System.out.println("打包结果：");
         for (HashMap<String, String> packageItem : packageList) {
-            System.out.println("CID：" + packageItem.get("cid")+ " 大小：" + packageItem.get("size") + "  文件名：" + packageItem.get("fileName") );
+            System.out.println("CID：" + packageItem.get("fileCid")+ " 大小：" + packageItem.get("size") + "  文件名：" + packageItem.get("fileName") );
         }
         System.out.println("总数量："+packageList.size());
         System.out.print("是否生成已成功列表文件(y/n):");
@@ -763,18 +768,18 @@ public class Commands {
             if (select.equals("y") || select.equals("yes")) {
                 System.out.print("请输入文件名(不含后缀):");
                 String fileName = Main.scanner.nextLine();
-                JSONObject fileJson = new JSONObject();
+//                JSONObject fileJson = new JSONObject();
                 JSONArray pins = new JSONArray();
                 for(HashMap<String,String> packageItem:packageList){
                     JSONObject jsonObject = new JSONObject();
-                    jsonObject.put("cid",packageItem.get("cid"));
+                    jsonObject.put("fileCid",packageItem.get("fileCid"));
                     jsonObject.put("fileName",packageItem.get("fileName"));
                     jsonObject.put("size",packageItem.get("size"));
                     pins.add(jsonObject);
                 }
-                fileJson.put("pins",pins);
+//                fileJson.put("pins",pins);
 
-                ConfigManager.saveConfig(AutoPins.pinsFile+fileName+".pins.json",fileJson);
+                ConfigManager.savePinsConfig(AutoPins.pinsFile+fileName+".pins.json",pins);
                 System.out.println("已成功列表文件保存成功。\n");
 
                 break;
@@ -787,6 +792,42 @@ public class Commands {
         }
     }
 
+    /**
+     * 预热功能
+     */
+    public static void preheat(){
+        while (true) {
+            System.out.print("""
+    
+                            命令列表：
+                            file: 文件预热
+                            back: 返回上一层
+                            
+                            请选择功能:
+                            """);
+            String command = Main.scanner.nextLine().toLowerCase();
+            switch (command) {
+                case "file" -> FilePreheater.filePreheat();
+                case "back" -> {
+                    return;
+                }
+                default -> {
+                    System.out.println("""
+    
+                                        命令列表：
+                                        file: 文件预热
+                                        back: 返回上一层
+                                        """
+                    );
+
+                }
+            }
+        }
+    }
+
+    /**
+     * 配置文件查看与修改功能
+     */
     public static void config(){
         while (true) {
             JSONObject config =ConfigManager.getConfig("config.json")==null?new JSONObject():ConfigManager.getConfig("config.json");
@@ -808,6 +849,12 @@ public class Commands {
 
             System.out.println("#文件打包分块的大小(不会将大于此值的文件进行细分打包，会单独作为一个包)");
             System.out.println("packagingSize(长整型 单位字节) = "+ (Objects.equals(config.getLong("packagingSize"),null)? IpfsApi.packagingSize:config.getLong("packagingSize"))+"\n");
+
+            System.out.println("#每个网关的每个文件 预热时最大线程数(实际最大线程数为 文件数*对应网关数*此值)");
+            System.out.println("maxPreheatThreads(整型) = "+ (Objects.equals(config.getInteger("maxPreheatThreads"),null)? IpfsApi.maxPreheatThreads:config.getInteger("maxPreheatThreads"))+"\n");
+
+            System.out.println("#文件预热时最大单个块大小");
+            System.out.println("maxPreheatBlockSize(长整型 单位字节) = "+ (Objects.equals(config.getLong("maxPreheatBlockSize"),null)? IpfsApi.maxPreheatBlockSize:config.getLong("maxPreheatBlockSize"))+"\n");
 
             System.out.println("命令格式:[配置项] [修改值]");
             System.out.println("返回上一层请使用back命令"+"\n");
@@ -855,6 +902,10 @@ public class Commands {
                             }
                             case "ipfsapiurl" -> {
                                 if (commands.length == 2) {
+                                    if (commands[1].endsWith("/")) {
+                                        //移除最后一个/
+                                        commands[1] = commands[1].replaceAll("/$", "");
+                                    }
                                     config.put("ipfsApiUrl", commands[1]);
                                     ConfigManager.saveConfig("config.json", config);
                                 } else {
@@ -867,7 +918,7 @@ public class Commands {
                                         config.put("getCidMaxSize", Long.parseLong(commands[1]));
                                         ConfigManager.saveConfig("config.json", config);
                                     }catch (Exception e){
-                                        System.out.println("输入有误，请重新输入！(最大值为9223372036854775807)\n");
+                                        System.out.println("输入有误，请重新输入！(最大值为"+Long.MAX_VALUE+")\n");
                                     }
                                 } else {
                                     System.out.println("正确格式(不区分大小写):getCidMaxSize [大小(数字)]");
@@ -879,10 +930,34 @@ public class Commands {
                                         config.put("packagingSize", Long.parseLong(commands[1]));
                                         ConfigManager.saveConfig("config.json", config);
                                     }catch (Exception e){
-                                        System.out.println("输入有误，请重新输入！(最大值为9223372036854775807)\n");
+                                        System.out.println("输入有误，请重新输入！(最大值为"+Long.MAX_VALUE+")\n");
                                     }
                                 } else {
                                     System.out.println("正确格式(不区分大小写):packagingSize [大小(数字)]");
+                                }
+                            }
+                            case "maxpreheatthreads" -> {
+                                if (commands.length == 2) {
+                                    try {
+                                        config.put("maxPreheatThreads", Integer.parseInt(commands[1]));
+                                        ConfigManager.saveConfig("config.json", config);
+                                    }catch (Exception e){
+                                        System.out.println("输入有误，请重新输入！(最大值为"+Integer.MAX_VALUE+")\n");
+                                    }
+                                } else {
+                                    System.out.println("正确格式(不区分大小写):maxPreheatThreads [大小(数字)]");
+                                }
+                            }
+                            case "maxpreheatblocksize" -> {
+                                if (commands.length == 2) {
+                                    try {
+                                        config.put("maxPreheatBlockSize", Long.parseLong(commands[1]));
+                                        ConfigManager.saveConfig("config.json", config);
+                                    }catch (Exception e){
+                                        System.out.println("输入有误，请重新输入！(最大值为"+Long.MAX_VALUE+")\n");
+                                    }
+                                } else {
+                                    System.out.println("正确格式(不区分大小写):maxPreheatBlockSize [大小(数字)]");
                                 }
                             }
                             default -> System.out.println("未知命令！");
@@ -895,15 +970,22 @@ public class Commands {
         }
     }
 
+    /**
+     * 帮助功能
+     */
     public static void help(){
-        System.out.println("\n命令列表：");
-        System.out.println("getcids:自动获取目录下所有文件CID列表(多线程,可限制大小)，并生成.pins.json文件；");
-        System.out.println("pins:自动批量pin文件到Crust；");
-        System.out.println("packaging:将分块(文件)列表打包，每个包可限制最大大小。(注意:不会将大于此大小的文件块分块，会单独作为一个包)");
-        System.out.println("config:修改配置文件；");
-        System.out.println("help:显示帮助；");
-        System.out.println("exit:退出程序。");
-        System.out.println();
+        System.out.println("""
+                
+                命令列表：
+                getcids: 自动获取目录下所有文件CID列表(多线程,可限制大小)，并生成.pins.json文件；
+                pins: 自动批量pin文件到Crust；
+                packaging: 将分块(文件)列表打包，每个包可限制最大大小(注意:不会将大于此大小的文件块分块，会单独作为一个包)；
+                preheat: 预热功能集合；
+                config: 修改配置文件；
+                help: 显示帮助；
+                exit: 退出程序。
+                
+                """);
     }
 }
 class TempFiles{

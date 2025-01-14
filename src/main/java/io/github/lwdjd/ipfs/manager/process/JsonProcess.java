@@ -1,4 +1,4 @@
-package io.github.lwdjd.ipfs.manager;
+package io.github.lwdjd.ipfs.manager.process;
 
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;

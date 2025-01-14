@@ -1,7 +1,9 @@
 package io.github.lwdjd.ipfs.manager.config;
 
 import com.alibaba.fastjson2.JSON;
+import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
+import com.alibaba.fastjson2.JSONWriter;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -52,7 +54,20 @@ public class ConfigManager {
             return false;
         }
     }
-
+    public static JSONArray readPinsConfig(String relativePath) {
+        // 首先尝试从文件系统读取配置文件
+        try {
+            Path configFilePath = Paths.get(relativePath);
+            if (Files.exists(configFilePath)) {
+                String fileContent = Files.readString(configFilePath);
+                return JSON.parseArray(fileContent);
+            }else {
+                throw new RuntimeException("文件不存在");
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("读取失败",e);
+        }
+    }
     // 保存配置文件的方法，接收配置的相对路径和JSONObject对象
     public static boolean saveConfig(String relativePath, JSONObject config) {
         try {
@@ -66,7 +81,7 @@ public class ConfigManager {
             }
 
             // 将JSONObject转换为JSON字符串并写入文件
-            String configJson = JSON.toJSONString(config);
+            String configJson = JSON.toJSONString(config,JSONWriter.Feature.LargeObject);
             Files.writeString(path, configJson);
 
             // 更新内存中的配置缓存
@@ -78,6 +93,28 @@ public class ConfigManager {
         }
     }
 
+    // 保存配置pin数据文件的方法，接收配置的相对路径和JSONObject对象
+    public static boolean savePinsConfig(String relativePath, JSONArray config) {
+        try {
+            // 获取配置文件的路径和父目录路径
+            Path path = Paths.get(relativePath);
+            Path dirPath = path.getParent();
+
+            // 确保配置文件所在的目录存在
+            if (dirPath != null && !Files.exists(dirPath)) {
+                Files.createDirectories(dirPath);
+            }
+
+            // 将JSONObject转换为JSON字符串并写入文件
+            String configJson = JSON.toJSONString(config,JSONWriter.Feature.LargeObject);
+            Files.writeString(path, configJson);
+
+            return true;
+        } catch (IOException e) {
+            e.printStackTrace();
+            return false;
+        }
+    }
     // 获取配置文件
     public static JSONObject getConfig(String relativePath) {
         return configFiles.get(relativePath);

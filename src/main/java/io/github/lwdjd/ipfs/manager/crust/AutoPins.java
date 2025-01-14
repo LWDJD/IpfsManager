@@ -98,7 +98,7 @@ public class AutoPins {
         for(int i=0;i<cids.size();i++){
 
             //如果此项没有cid则跳过
-            if(cids.get(i).get("cid")==null){
+            if(cids.get(i).get("fileCid")==null){
                 continue;
             }
 
@@ -107,13 +107,13 @@ public class AutoPins {
             if(cids.get(i).get("fileName")!=null){
                 fileName = cids.get(i).get("fileName");
             }else{
-                fileName = cids.get(i).get("cid");
+                fileName = cids.get(i).get("fileCid");
             }
 
 
             String repost = "";
             try {
-                repost = sendPin(cids.get(i).get("cid"),fileName,sign);
+                repost = sendPin(cids.get(i).get("fileCid"),fileName,sign);
             } catch (Exception e) {
                 repost = "Error : "+e.getMessage();
             }
@@ -122,7 +122,7 @@ public class AutoPins {
             //返回监听数据
             for(PinsListener pinsListener:pinsListenerList){
                 try {
-                    pinsListener.onPins(cids.size(),i+1,cids.get(i).get("cid"),fileName,repost);
+                    pinsListener.onPins(cids.size(),i+1,cids.get(i).get("fileCid"),fileName,repost);
                 }catch (Exception e){
                     e.printStackTrace();
                 }

@@ -113,6 +113,14 @@ public class IpfsApi {
         JSONObject cid = report.getJSONObject("Cid");
         return cid.getString("/");
     }
+
+    /**
+     *
+     * @param storeCodec 存储格式
+     * @param inputCodec 输入格式
+     * @param fromData 输入数据
+     * @return 返回CID
+     */
     public static String putDAG_json(String storeCodec,String inputCodec,JSONObject fromData) throws Exception {
         String ipfsApiUrl;
         JSONObject config =ConfigManager.getConfig("config.json")==null?new JSONObject():ConfigManager.getConfig("config.json");

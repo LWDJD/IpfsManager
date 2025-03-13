@@ -68,6 +68,20 @@ public class ConfigManager {
             throw new RuntimeException("读取失败",e);
         }
     }
+    public static JSONObject readConfig(String relativePath) {
+        // 首先尝试从文件系统读取配置文件
+        try {
+            Path configFilePath = Paths.get(relativePath);
+            if (Files.exists(configFilePath)) {
+                String fileContent = Files.readString(configFilePath);
+                return JSON.parseObject(fileContent);
+            }else {
+                throw new RuntimeException("文件不存在");
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("读取失败",e);
+        }
+    }
     // 保存配置文件的方法，接收配置的相对路径和JSONObject对象
     public static boolean saveConfig(String relativePath, JSONObject config) {
         try {
@@ -164,6 +178,13 @@ public class ConfigManager {
 //            System.out.println("Default config not found in classpath.");
 //        }
 //    }
+
+    /**
+     * 列出目录中的文件
+     *
+     * @param path 路径
+     * @return 文件列表
+     */
     public static List<String> listFilesInDirectory(String path) {
         // 创建一个ArrayList来存储文件名
         List<String> fileNames = new ArrayList<>();
@@ -193,14 +214,21 @@ public class ConfigManager {
         return fileNames; // 返回包含文件名的列表
     }
 
-    public static List<String> filterPinsJsonFiles(List<String> fileNames) {
-        // 创建一个新的ArrayList来存储以.pins.json结尾的文件名
+    /**
+     * 筛选文件名后缀
+     *
+     * @param fileNames 文件名列表
+     * @param suffix 后缀名
+     * @return 返回筛选后的列表
+     */
+    public static List<String> filterJsonFiles(List<String> fileNames, String suffix) {
+        // 创建一个新的ArrayList来存储符合后缀的文件名
         List<String> pinsJsonFiles = new ArrayList<>();
 
         // 遍历传入的文件名列表
         for (String fileName : fileNames) {
-            // 检查文件名是否以.pins.json结尾
-            if (fileName.endsWith(".pins.json")) {
+            // 检查文件名是否以指定后缀结尾
+            if (fileName.endsWith(suffix)) {
                 pinsJsonFiles.add(fileName);
             }
         }
@@ -209,7 +237,7 @@ public class ConfigManager {
     }
 
     public static void main(String[] args){
-        List<String> fileNames = filterPinsJsonFiles(ConfigManager.listFilesInDirectory("pinsList/"));
+        List<String> fileNames = filterJsonFiles(ConfigManager.listFilesInDirectory("pinsList/"),".pins.json");
         for (String fileName : fileNames){
             System.out.println(fileName);
         }

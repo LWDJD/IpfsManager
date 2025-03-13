@@ -2,6 +2,7 @@ package io.github.lwdjd.ipfs.manager.commands;
 
 import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
+import io.github.lwdjd.ipfs.manager.backup.Dag;
 import io.github.lwdjd.ipfs.manager.network.FilePreheater;
 import io.github.lwdjd.ipfs.manager.process.JsonProcess;
 import io.github.lwdjd.ipfs.manager.Main;
@@ -49,7 +50,7 @@ public class Commands {
                                 resultLock.unlock();
                             }
                         }catch (Exception e){
-                            System.out.println("此文件子块获取失败"+" cid:"+jsonObject.getJSONObject("Hash").getString("/"));
+                            System.out.println("此文件子块获取失败"+" cid:"+jsonObject.getJSONObject("Hash").getString("/")+" 大小："+jsonObject.getString("Tsize"));
                             badCidLock.lock();
                             try {
                                 badCid.add(linkMap);
@@ -423,7 +424,7 @@ public class Commands {
      */
     public static void pins(){
         List<HashMap<String,String>> pins;
-        List<String> file = ConfigManager.filterPinsJsonFiles(ConfigManager.listFilesInDirectory(AutoPins.pinsFile));
+        List<String> file = ConfigManager.filterJsonFiles(ConfigManager.listFilesInDirectory(AutoPins.pinsFile),".pins.json");
         if(file.size()==0){
             System.out.println("\n没有找到文件，请在pinsList文件夹添加以 .pins.json 结尾的CID列表文件,可以直接使用getcids功能获取。");
             System.out.println("可以使用格式化工具将json格式化，方便查看。");
@@ -444,17 +445,16 @@ public class Commands {
                     }
                     iid = Integer.parseInt(id);
                     if (iid<1||iid>file.size()){
-                        System.out.print("输入有误，请重新");
+                        System.out.print("输入有误，请重新输入！");
                         continue;
                     }
                     break;
                 } catch (Exception e) {
-                    System.out.print("输入有误，请重新");
+                    System.out.print("输入有误，请重新输入！");
                 }
             }
             try {
-//                ConfigManager.loadConfig(AutoPins.pinsFile+file.get(iid-1));
-//                JSONObject jsonObject = ConfigManager.getConfig(AutoPins.pinsFile+file.get(iid-1));
+
                 JSONArray jsonArray = ConfigManager.readPinsConfig(AutoPins.pinsFile+file.get(iid-1));
                 pins = JsonProcess.convertJsonToListHashMap(jsonArray);
 
@@ -537,7 +537,7 @@ public class Commands {
     public static void packaging(){
         JSONObject config =ConfigManager.getConfig("config.json")==null?new JSONObject():ConfigManager.getConfig("config.json");
         List<HashMap<String,String>> blockList;
-        List<String> file = ConfigManager.filterPinsJsonFiles(ConfigManager.listFilesInDirectory(AutoPins.pinsFile));
+        List<String> file = ConfigManager.filterJsonFiles(ConfigManager.listFilesInDirectory(AutoPins.pinsFile),".pins.json");
         if(file.size()==0){
             System.out.println("\n没有找到文件，请在pinsList文件夹添加以 .pins.json 结尾的CID列表文件,可以直接使用getcids功能获取。");
             System.out.println("可以使用格式化工具将json格式化，方便查看。");
@@ -826,6 +826,115 @@ public class Commands {
     }
 
     /**
+     * 备份功能
+     */
+    public static void backup(){
+        System.out.print("请输入需要备份的CID(back返回):");
+        String command = Main.scanner.nextLine();
+        if (command.equalsIgnoreCase("back")){
+            System.out.println();
+            return;
+        }
+        String r = IpfsApi.getDAG(command);
+        if(r.contains("Error")){
+            System.out.println(r);
+            return;
+        }
+        JSONObject backupJson = Dag.backup(command);
+        if(!(Dag.badCid.size()>0)) {
+            if (ConfigManager.saveConfig(Dag.backupPath + command + ".dags.json", backupJson)) {
+                System.out.println("""
+                        备份成功！
+                        备份文件路径：
+                        """ + Dag.backupPath + command + ".dags.json\n"
+                );
+            } else {
+                System.out.println("备份失败，请检查CID以及API配置!!\n");
+            }
+        }else {
+            System.out.print("是否生成已失败列表文件(y/n):");
+            while (true) {
+                String select = Main.scanner.nextLine();
+                select = select.toLowerCase();
+                if (select.equals("y") || select.equals("yes")) {
+                    System.out.print("请输入文件名(不含后缀):");
+                    String fileName = Main.scanner.nextLine();
+//                    JSONObject fileJson = new JSONObject();
+                    JSONArray pins = new JSONArray();
+                    for(HashMap<String, String> file:Dag.badCid){
+                        JSONObject jsonObject = new JSONObject();
+                        jsonObject.put("fileCid",file.get("Hash"));
+                        jsonObject.put("fileName",file.get("Name"));
+                        jsonObject.put("size",file.get("Size"));
+                        pins.add(jsonObject);
+                    }
+//                    fileJson.put("pins",pins);
+//
+//                    ConfigManager.saveConfig(AutoPins.pinsFile+fileName+".pins.json",fileJson);
+
+                    ConfigManager.savePinsConfig(Dag.backupPath+fileName+".badDags.json",pins);
+                    System.out.println("已失败列表文件保存成功。\n");
+
+                    break;
+                } else if (select.equals("n") || select.equals("no")) {
+                    System.out.println("已取消生成已失败列表文件。\n");
+                    break;
+                } else {
+                    System.out.print("未知命令请重新输入,是否生成已失败列表文件(y/n):");
+                }
+            }
+            Dag.badCid.clear();
+        }
+    }
+
+    public static void restore(){
+        List<String> file = ConfigManager.filterJsonFiles(ConfigManager.listFilesInDirectory(Dag.backupPath),".dags.json");
+        if(file.size()==0){
+            System.out.println("\n没有找到文件，请在backup文件夹添加以 .dags.json 结尾的备份文件。");
+            System.out.println("可以使用格式化工具将json格式化，方便查看。");
+        }else {
+            System.out.println("找到以下列表");
+            for (String fileName : file) {
+                System.out.println((file.indexOf(fileName) + 1) + ". " + fileName);
+            }
+            int iid;
+            while (true) {
+                System.out.print("输入编号(back返回)：");
+                try {
+                    String id = Main.scanner.nextLine();
+                    if (id.equals("back")){
+                        System.out.println();
+                        return;
+                    }
+                    iid = Integer.parseInt(id);
+                    if (iid<1||iid>file.size()){
+                        System.out.print("输入有误，请重新输入！");
+                        continue;
+                    }
+                    break;
+                } catch (Exception e) {
+                    System.out.print("输入有误，请重新输入！");
+                }
+            }
+            try {
+
+                JSONObject jsonObject = ConfigManager.readConfig(Dag.backupPath+file.get(iid-1));
+                String root = Dag.restore(jsonObject);
+
+                if(root.contains("lose+")){
+                    System.out.println("导入出错，可能存在失败加载块，根CID："+root.replace("lose+",""));
+                }else {
+                    System.out.println("导入成功，根CID："+root+"\n");
+                }
+
+            } catch (Exception e){
+                System.out.println("文件加载失败,请检查文件json格式是否正确。");
+            }
+
+        }
+    }
+
+    /**
      * 配置文件查看与修改功能
      */
     public static void config(){
@@ -978,14 +1087,14 @@ public class Commands {
                 
                 命令列表：
                 getcids: 自动获取目录下所有文件CID列表(多线程,可限制大小)，并生成.pins.json文件；
-                pins: 自动批量pin文件到Crust；
                 packaging: 将分块(文件)列表打包，每个包可限制最大大小(注意:不会将大于此大小的文件块分块，会单独作为一个包)；
                 preheat: 预热功能集合；
+                pins: 自动批量pin文件到Crust；
                 config: 修改配置文件；
                 help: 显示帮助；
                 exit: 退出程序。
                 
-                """);
+        """);
     }
 }
 class TempFiles{

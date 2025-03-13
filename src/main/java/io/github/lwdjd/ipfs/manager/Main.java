@@ -66,7 +66,9 @@ public class Main {
                 case "pins" -> Commands.pins();
                 case "packaging" -> Commands.packaging();
                 case "preheat" -> Commands.preheat();
+                case "backup" -> Commands.backup();
                 case "config" -> Commands.config();
+                case "restore" -> Commands.restore();
                 case "exit" -> {
                     return;
                 }

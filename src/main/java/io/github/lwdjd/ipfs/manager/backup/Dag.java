@@ -8,6 +8,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -82,7 +83,7 @@ public class Dag {
     public static JSONArray DAGresult = new JSONArray();
     public static Lock resultLock = new ReentrantLock(true);
     public static ExecutorService executorGetDAGLinks = new ThreadPoolExecutor(
-            64, 64, 20, TimeUnit.SECONDS, // 核心线程数 = 最大线程数，空闲60秒后回收
+            8, 8, 20, TimeUnit.SECONDS, // 核心线程数 = 最大线程数，空闲60秒后回收
             new LinkedBlockingQueue<>()
     );
     public static AtomicLong count = new AtomicLong();
@@ -134,69 +135,116 @@ public class Dag {
     }
 
 
-
-    private static boolean reStatus = false;
+    private static JSONArray dataArray = new JSONArray();
+    private static final Lock dataLock = new ReentrantLock(true);
+    public static ArrayList<Thread> ListPutDAGLinks = new ArrayList<>();
+    public static HashMap<String,Boolean> ListPutDAGLinksStatus = new HashMap<>();
+    public static Lock ListPutDAGLinksStatusLock = new ReentrantLock(true);
     /**
      * 恢复数据
      *
      * @param backupData 已备份数据
-     * @return 根CID，前缀lose+表示存在失败块
+     * @return 根CID
      */
     public static String restore(JSONObject backupData) throws InterruptedException {
-        JSONArray data = backupData.getJSONArray("data");
-        JSONArray newJsonArray = new JSONArray();
-        List<Thread> threadList=new ArrayList<>();
-        for (int i = 0; i < data.size(); i++) {
-            if(newJsonArray.size()==20){
-
-                Thread thread = new Thread(()->{
-                    if(putDAGArray(newJsonArray)){
-                        System.out.println("出现失败块");
-                        reStatus=true;
-                    }
-                });
+        dataLock.lock();
+        try {
+            dataArray = backupData.getJSONArray("data");
+        }finally {
+            dataLock.unlock();
+        }
+        for (int i=0;i<8;i++){
+            newPutDAGThread();
+        }
+        Thread stat = new Thread(()->{
+            while (true) {
+                dataLock.lock();
                 try {
-                    Thread.sleep(100);
-                } catch (InterruptedException ignored) {
-
+                    System.out.println("剩余块数：" + dataArray.size());
+                }finally {
+                    dataLock.unlock();
                 }
-                thread.start();
-                threadList.add(thread);
-                newJsonArray.clear();
+                try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException ignored) {
+                    return;
+                }
             }
-            newJsonArray.add(data.getJSONObject(i));
-
-        }
-        if(newJsonArray.size()>0){
-            if(putDAGArray(newJsonArray)){
-                System.out.println("出现失败块");
-                reStatus=true;
-            }
-        }
-
-        for(Thread thread:threadList){
+        });
+        stat.start();
+        for(Thread thread:ListPutDAGLinks){
             thread.join();
         }
-
-        if(reStatus){
-            reStatus=false;
-            return "lose+"+backupData.getString("rootCid");
-        }
+        stat.interrupt();
         return backupData.getString("rootCid");
     }
 
-    private static boolean putDAGArray(JSONArray data){
+    private static void newPutDAGThread(){
+        Thread thread = new Thread(()->{
+            boolean stat = true;
+            while (true){
+                if(dataArray.size()>0){
+                    if(!stat) {
+                        stat = true;
+                        ListPutDAGLinksStatusLock.lock();
+                        try {
+                            ListPutDAGLinksStatus.put(Thread.currentThread().getName(), true);
+                        } finally {
+                            ListPutDAGLinksStatusLock.unlock();
+                        }
 
-        for (int i = 0; i < data.size(); i++) {
-            try {
-                JSONObject jsonObject = data.getJSONObject(i);
-                IpfsApi.putDAG_json(IpfsApi.dagJson,IpfsApi.dagJson,jsonObject);
-            } catch (Exception e) {
-                e.printStackTrace();
-                return true;
+                    }
+
+                    JSONObject jsonObject ;
+                    dataLock.lock();
+                    try {
+                        jsonObject = dataArray.getJSONObject(0);
+                        dataArray.remove(0);
+                    }catch (Exception e){
+                        e.printStackTrace();
+                        System.out.println("出现意料之外的错误");
+                        System.exit(1);
+                        continue;
+                    } finally {
+                        dataLock.unlock();
+                    }
+                    try {
+                        IpfsApi.putDAG_json(IpfsApi.dagPb,IpfsApi.dagJson,jsonObject);
+//                        System.out.println();
+                    } catch (Exception e) {
+                        System.out.println("出现一个失败块，已添加至重试队列");
+                        dataLock.lock();
+                        try {
+                            dataArray.add(jsonObject);
+                        }finally {
+                            dataLock.unlock();
+                        }
+                    }
+                }else {
+                    stat = false;
+                    ListPutDAGLinksStatusLock.lock();
+                    try {
+                        ListPutDAGLinksStatus.put(Thread.currentThread().getName(),false);
+                        for(boolean s:ListPutDAGLinksStatus.values()){
+                            if(s){
+                                break;
+                            }
+                            return;
+                        }
+                    }finally {
+                        ListPutDAGLinksStatusLock.unlock();
+                    }
+
+                    try {
+                        Thread.sleep(1000);
+                    } catch (InterruptedException ignored) {
+
+                    }
+                }
             }
-        }
-        return false;
+        });
+        thread.start();
+        ListPutDAGLinks.add(thread);
     }
 }
 

@@ -1,9 +1,7 @@
 package io.github.lwdjd.ipfs.manager;
 
 import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONArray;
 import com.alibaba.fastjson2.JSONObject;
-import com.alibaba.fastjson2.JSONWriter;
 import io.github.lwdjd.ipfs.manager.commands.Commands;
 import io.github.lwdjd.ipfs.manager.config.ConfigManager;
 import io.github.lwdjd.ipfs.manager.crust.AutoPins;

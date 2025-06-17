@@ -464,13 +464,33 @@ public class Network {
 
 
     public static void main(String[] args){
-        try {
-            Headers a = getHeaders("https://gw.crustgw.work/ipfs/bafybeihqwtb6y2ta3zeudfcueiamh465w4qbcmwwrnzmudpo5wyvqc3po4");
-            System.out.println("Size = "+a.get("content-length"));
-        } catch (Exception e) {
-            throw new RuntimeException(e);
+        String url="http://192.168.3.90:8081/ipfs/bafybeih3dkkzdmlndg5qay3p27mrvz7opdgcqe7vblvxbwhua6ulcp3pta?download=true&filename=Java-2024_9_8-55.7z";
+        AtomicLong atomicLong = new AtomicLong();
+        long a = 0L;
+        for(int i=0;i<32;i++) {
+            new Thread(() -> {
+                fakeDownload(url, atomicLong);
+            }).start();
+        }
+        while (System.currentTimeMillis()!=0L){
+            try {
+                Thread.sleep(1000);
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+            System.out.println(StorageFormatter.formatBytes(atomicLong.get()-a));
+            a = atomicLong.get();
         }
     }
+
+//    public static void main(String[] args){
+//        try {
+//            Headers a = getHeaders("https://gw.crustgw.work/ipfs/bafybeihqwtb6y2ta3zeudfcueiamh465w4qbcmwwrnzmudpo5wyvqc3po4");
+//            System.out.println("Size = "+a.get("content-length"));
+//        } catch (Exception e) {
+//            throw new RuntimeException(e);
+//        }
+//    }
 
     //测试使用
 //    public static void main(String[] args){
